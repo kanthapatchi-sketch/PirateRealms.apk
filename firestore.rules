@@ -1,0 +1,255 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidCaptainId(captainId) {
+      return captainId in ['ignis', 'marina', 'barnaby', 'vane'];
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 &&
+             data.userId.size() <= 128 &&
+             data.displayName is string &&
+             data.displayName.size() >= 1 &&
+             data.displayName.size() <= 40 &&
+             data.preferredCaptain is string &&
+             isValidCaptainId(data.preferredCaptain) &&
+             data.wins is int && data.wins >= 0 &&
+             data.gamesPlayed is int && data.gamesPlayed >= 0 &&
+             data.highestGold is int && data.highestGold >= 0 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidRoom(data) {
+      return data.roomCode is string &&
+             data.roomCode.size() == 6 &&
+             data.roomCode.matches('^[A-Z0-9]{6}$') &&
+             data.hostId is string &&
+             data.hostId.size() >= 1 &&
+             data.hostId.size() <= 128 &&
+             data.status in ['waiting', 'playing', 'finished'] &&
+             data.isPublic is bool &&
+             data.maxPlayers is int &&
+             data.maxPlayers >= 2 &&
+             data.maxPlayers <= 4 &&
+             data.memberUids is list &&
+             data.memberUids.size() >= 1 &&
+             data.memberUids.size() <= 4 &&
+             data.memberUids[0] is string &&
+             data.players is list &&
+             data.players.size() >= 1 &&
+             data.players.size() <= 4 &&
+             data.tileOwners is list &&
+             data.tileOwners.size() == 28 &&
+             data.tileLevels is list &&
+             data.tileLevels.size() == 28 &&
+             data.tileFestivals is list &&
+             data.tileFestivals.size() == 28 &&
+             data.currentTurnIndex is int &&
+             data.currentTurnIndex >= 0 &&
+             data.currentTurnIndex < 4 &&
+             data.turnNumber is int &&
+             data.turnNumber >= 0 &&
+             data.lastDice1 is int &&
+             data.lastDice1 >= 0 &&
+             data.lastDice1 <= 6 &&
+             data.lastDice2 is int &&
+             data.lastDice2 >= 0 &&
+             data.lastDice2 <= 6 &&
+             data.lastLog is string &&
+             data.lastLog.size() <= 240 &&
+             data.winnerUid is string &&
+             data.winnerUid.size() <= 128 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidRoomMessage(data) {
+      return data.roomId is string &&
+             data.roomId.size() == 6 &&
+             data.senderId is string &&
+             data.senderId == request.auth.uid &&
+             data.senderName is string &&
+             data.senderName.size() >= 1 &&
+             data.senderName.size() <= 40 &&
+             data.captainId is string &&
+             isValidCaptainId(data.captainId) &&
+             data.text is string &&
+             data.text.size() >= 1 &&
+             data.text.size() <= 120 &&
+             data.stickerId is string &&
+             data.stickerId.size() <= 32 &&
+             data.memberUids is list &&
+             data.memberUids.size() >= 1 &&
+             data.memberUids.size() <= 4 &&
+             request.auth.uid in data.memberUids &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time;
+    }
+
+    match /users/{userId} {
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'preferredCaptain', 'wins', 'gamesPlayed', 'highestGold', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'preferredCaptain', 'wins', 'gamesPlayed', 'highestGold', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt <= request.time &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'preferredCaptain', 'wins', 'gamesPlayed', 'highestGold', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() &&
+                    isValidId(roomId) &&
+                    (
+                      request.auth.uid in existing().memberUids ||
+                      (existing().status == 'waiting' && existing().memberUids.size() < existing().maxPlayers)
+                    );
+
+      allow list: if isSignedIn() &&
+                     (
+                       request.auth.uid in resource.data.memberUids ||
+                       (resource.data.status == 'waiting' && resource.data.isPublic == true)
+                     );
+
+      allow create: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       roomId.size() == 6 &&
+                       incoming().roomCode == roomId &&
+                       incoming().hostId == request.auth.uid &&
+                       incoming().status == 'waiting' &&
+                       incoming().memberUids.size() == 1 &&
+                       incoming().memberUids[0] == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'roomCode', 'hostId', 'status', 'isPublic', 'maxPlayers',
+                         'memberUids', 'players', 'tileOwners', 'tileLevels', 'tileFestivals',
+                         'currentTurnIndex', 'turnNumber', 'lastDice1', 'lastDice2', 'lastLog',
+                         'winnerUid', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'roomCode', 'hostId', 'status', 'isPublic', 'maxPlayers',
+                         'memberUids', 'players', 'tileOwners', 'tileLevels', 'tileFestivals',
+                         'currentTurnIndex', 'turnNumber', 'lastDice1', 'lastDice2', 'lastLog',
+                         'winnerUid', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().createdAt <= request.time &&
+                       isValidRoom(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       existing().status != 'finished' &&
+                       incoming().roomCode == existing().roomCode &&
+                       incoming().hostId == existing().hostId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidRoom(incoming()) &&
+                       (
+                         // Action: Join waiting room
+                         (
+                           existing().status == 'waiting' &&
+                           !(request.auth.uid in existing().memberUids) &&
+                           existing().memberUids.size() < existing().maxPlayers &&
+                           request.auth.uid in incoming().memberUids &&
+                           incoming().memberUids.size() == existing().memberUids.size() + 1 &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'players', 'updatedAt'])
+                         ) ||
+                         // Action: Leave waiting room
+                         (
+                           existing().status == 'waiting' &&
+                           request.auth.uid in existing().memberUids &&
+                           request.auth.uid != existing().hostId &&
+                           !(request.auth.uid in incoming().memberUids) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'players', 'updatedAt'])
+                         ) ||
+                         // Action: Host starts match (and optionally fills bots)
+                         (
+                           existing().status == 'waiting' &&
+                           request.auth.uid == existing().hostId &&
+                           incoming().status == 'playing' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'status', 'players', 'tileOwners', 'tileLevels', 'tileFestivals',
+                             'currentTurnIndex', 'turnNumber', 'lastLog', 'updatedAt'
+                           ])
+                         ) ||
+                         // Action: Member advances turn / board state
+                         (
+                           existing().status == 'playing' &&
+                           request.auth.uid in existing().memberUids &&
+                           incoming().status in ['playing', 'finished'] &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'status', 'players', 'tileOwners', 'tileLevels', 'tileFestivals',
+                             'currentTurnIndex', 'turnNumber', 'lastDice1', 'lastDice2',
+                             'lastLog', 'winnerUid', 'updatedAt'
+                           ])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(roomId) && request.auth.uid == existing().hostId;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() &&
+                      isValidId(roomId) &&
+                      isValidId(messageId) &&
+                      request.auth.uid in existing().memberUids;
+
+        allow list: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(messageId) &&
+                         incoming().roomId == roomId &&
+                         incoming().senderId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'roomId', 'senderId', 'senderName', 'captainId',
+                           'text', 'stickerId', 'memberUids', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'roomId', 'senderId', 'senderName', 'captainId',
+                           'text', 'stickerId', 'memberUids', 'createdAt'
+                         ]) &&
+                         isValidRoomMessage(incoming()) &&
+                         exists(/databases/$(database)/documents/rooms/$(roomId)) &&
+                         request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberUids &&
+                         incoming().memberUids == get(/databases/$(database)/documents/rooms/$(roomId)).data.memberUids;
+
+        allow update, delete: if false;
+      }
+    }
+  }
+}

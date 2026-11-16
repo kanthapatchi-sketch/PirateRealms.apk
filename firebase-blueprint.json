@@ -1,0 +1,223 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Captain profile and career statistics for an authenticated player.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated Firebase user UID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Captain display name shown in lobby and matches."
+        },
+        "preferredCaptain": {
+          "type": "string",
+          "enum": ["ignis", "marina", "barnaby", "vane"],
+          "description": "Default selected chibi pirate captain."
+        },
+        "wins": {
+          "type": "integer",
+          "description": "Total victories achieved."
+        },
+        "gamesPlayed": {
+          "type": "integer",
+          "description": "Total matches completed."
+        },
+        "highestGold": {
+          "type": "integer",
+          "description": "Highest gold balance reached in a match."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "preferredCaptain",
+        "wins",
+        "gamesPlayed",
+        "highestGold",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MultiplayerRoom": {
+      "title": "MultiplayerRoom",
+      "description": "Online multiplayer game room supporting private 6-digit codes, auto-matchmaking, and live board sync.",
+      "type": "object",
+      "properties": {
+        "roomCode": {
+          "type": "string",
+          "description": "6-character uppercase room code matching the document ID."
+        },
+        "hostId": {
+          "type": "string",
+          "description": "UID of the room creator."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "playing", "finished"],
+          "description": "Current room lifecycle state."
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "True when listed in auto-matchmaking; false for private invite rooms."
+        },
+        "maxPlayers": {
+          "type": "integer",
+          "description": "Maximum players allowed (2 to 4)."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Authenticated participant UIDs in this room (1 to 4)."
+        },
+        "players": {
+          "type": "array",
+          "description": "Player state maps including bot slots."
+        },
+        "tileOwners": {
+          "type": "array",
+          "description": "28-element array of owner IDs for each board tile."
+        },
+        "tileLevels": {
+          "type": "array",
+          "description": "28-element array of building upgrade tiers (0 to 4)."
+        },
+        "tileFestivals": {
+          "type": "array",
+          "description": "28-element array of festival toll multipliers (1, 2, or 4)."
+        },
+        "currentTurnIndex": {
+          "type": "integer",
+          "description": "Active player slot index (0 to 3)."
+        },
+        "turnNumber": {
+          "type": "integer",
+          "description": "Monotonically increasing turn counter."
+        },
+        "lastDice1": {
+          "type": "integer",
+          "description": "Last rolled first die value (0 to 6)."
+        },
+        "lastDice2": {
+          "type": "integer",
+          "description": "Last rolled second die value (0 to 6)."
+        },
+        "lastLog": {
+          "type": "string",
+          "description": "Latest sailing log summary."
+        },
+        "winnerUid": {
+          "type": "string",
+          "description": "Winning player identifier once finished."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "roomCode",
+        "hostId",
+        "status",
+        "isPublic",
+        "maxPlayers",
+        "memberUids",
+        "players",
+        "tileOwners",
+        "tileLevels",
+        "tileFestivals",
+        "currentTurnIndex",
+        "turnNumber",
+        "lastDice1",
+        "lastDice2",
+        "lastLog",
+        "winnerUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RoomMessage": {
+      "title": "RoomMessage",
+      "description": "In-game quick chat message and chibi sticker reaction inside a multiplayer room.",
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "description": "Parent room ID."
+        },
+        "senderId": {
+          "type": "string",
+          "description": "UID of the sender."
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of the sender."
+        },
+        "captainId": {
+          "type": "string",
+          "enum": ["ignis", "marina", "barnaby", "vane"],
+          "description": "Captain avatar ID of the sender."
+        },
+        "text": {
+          "type": "string",
+          "description": "Quick chat text content."
+        },
+        "stickerId": {
+          "type": "string",
+          "description": "Chibi sticker emotion identifier or empty string."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized member UIDs from the parent room for query authorization."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "roomId",
+        "senderId",
+        "senderName",
+        "captainId",
+        "text",
+        "stickerId",
+        "memberUids",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Per-user captain profile and game stats."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/MultiplayerRoom" },
+      "description": "Active multiplayer game rooms indexed by 6-character roomCode."
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/RoomMessage" },
+      "description": "Append-only quick chat and chibi sticker reactions for a room."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Pirate Realms",
+  "description": "Fantasy pirate board game with AI bots, special dice, island upgrades, and online multiplayer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
